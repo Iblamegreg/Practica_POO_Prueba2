@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+
+<VBox alignment="CENTER" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="351.0" prefWidth="349.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.poo_practica_prueba_00.LoginController">
+   <children>
+      <Label alignment="CENTER" contentDisplay="CENTER" prefHeight="66.0" prefWidth="65.0" text="LOGIN" textAlignment="CENTER">
+         <font>
+            <Font size="22.0" />
+         </font>
+      </Label>
+      <Label prefHeight="50.0" prefWidth="61.0" text="Usuario:">
+         <font>
+            <Font size="14.0" />
+         </font>
+      </Label>
+      <TextField fx:id="txtUser" prefHeight="21.0" prefWidth="349.0" />
+      <Label prefHeight="58.0" prefWidth="63.0" text="Contraseña:" />
+      <PasswordField fx:id="txtPassword" />
+      <Label fx:id="lblMensaje" prefHeight="44.0" prefWidth="35.0" />
+      <Button fx:id="btnIngresar" mnemonicParsing="false" onAction="#onIngresar" text="Ingresar" />
+   </children>
+</VBox>
