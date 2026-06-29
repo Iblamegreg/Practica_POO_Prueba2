@@ -5,41 +5,57 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.Statement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 
 public class CrudController {
-    @FXML
-    private TextField txtCedula, txtNombre;
-    @FXML
-    private ComboBox<String> cmbCarrera;
-    @FXML
-    private CheckBox chkActivo;
-    @FXML
-    private TableView<Estudiante>  tablaEstudiantes;
-    @FXML
-    private TableColumn<Estudiante,String> colNombre, colCedula, colCarrera;
-    @FXML
-    private TableColumn<Estudiante,Integer> colId;
-    @FXML
-    private TableColumn<Estudiante, Boolean> colActivo;
+    @FXML private TextField txtCedula, txtNombre;
+    @FXML private ComboBox<String> cmbCarrera;
+    @FXML private CheckBox chkActivo;
+
+    // --- CONTROLES NUEVOS DEL DOCUMENTO ---
+    @FXML private RadioButton rdMas;
+    @FXML private RadioButton rdFem;
+    @FXML private ToggleGroup grupoGenero; // Maneja la exclusión mutua
+
+    @FXML private TableView<Estudiante> tablaEstudiantes;
+    @FXML private TableColumn<Estudiante, Integer> colId;
+    @FXML private TableColumn<Estudiante, String> colNombre, colCedula, colCarrera, colGenero; // Añadida colGenero
+    @FXML private TableColumn<Estudiante, Boolean> colActivo;
 
     private ObservableList<Estudiante> listaEstudiante;
     private Estudiante estudianteSeleccionado;
 
     @FXML
-    public void initialize(){
+    public void initialize() {
         cmbCarrera.setItems(FXCollections.observableArrayList("Desarrollo de Software", "Redes", "Electromecánica"));
 
+        // Vincular columnas
         colId.setCellValueFactory(new PropertyValueFactory<>("id"));
         colNombre.setCellValueFactory(new PropertyValueFactory<>("nombre"));
         colCedula.setCellValueFactory(new PropertyValueFactory<>("cedula"));
         colCarrera.setCellValueFactory(new PropertyValueFactory<>("carrera"));
+        colGenero.setCellValueFactory(new PropertyValueFactory<>("genero")); // Mapeo de la nueva columna
         colActivo.setCellValueFactory(new PropertyValueFactory<>("activo"));
+
+        // --- NUEVO: LISTENER DE SELECCIÓN AUTOMÁTICA (Reemplaza el On Mouse Clicked) ---
+        tablaEstudiantes.getSelectionModel().selectedItemProperty().addListener(
+                (obs, oldSelection, newSelection) -> {
+                    if (newSelection != null) {
+                        estudianteSeleccionado = newSelection;
+                        txtCedula.setText(newSelection.getCedula());
+                        txtNombre.setText(newSelection.getNombre());
+                        cmbCarrera.setValue(newSelection.getCarrera());
+                        chkActivo.setSelected(newSelection.isActivo());
+
+                        // Seleccionar el RadioButton correcto según el dato de la fila
+                        if (newSelection.getGenero().equals("Masculino")) {
+                            rdMas.setSelected(true);
+                        } else if (newSelection.getGenero().equals("Femenino")) {
+                            rdFem.setSelected(true);
+                        }
+                    }
+                }
+        );
 
         cargarDatosTabla();
     }
@@ -47,11 +63,11 @@ public class CrudController {
     @FXML
     private void cargarDatosTabla() {
         listaEstudiante = FXCollections.observableArrayList();
-        String query = "SELECT * FROM estudiantes";
+        String query = "SELECT * FROM estudiantes"; // Uso de Statement básico para lecturas globales
 
         try (Connection con = Conexion.conectar();
              Statement stmt = con.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+             ResultSet rs = stmt.executeQuery(query)) { // executeQuery devuelve un ResultSet
 
             while (rs.next()) {
                 listaEstudiante.add(new Estudiante(
@@ -59,6 +75,7 @@ public class CrudController {
                         rs.getString("cedula"),
                         rs.getString("nombre"),
                         rs.getString("carrera"),
+                        rs.getString("genero"), // Extraemos la nueva columna texto
                         rs.getBoolean("activo")
                 ));
             }
@@ -70,50 +87,48 @@ public class CrudController {
     }
 
     @FXML
-    void alSeleccionarFila(){
-        estudianteSeleccionado = tablaEstudiantes.getSelectionModel().getSelectedItem();
-
-        if (estudianteSeleccionado != null) {
-            txtCedula.setText(estudianteSeleccionado.getCedula());
-            txtNombre.setText(estudianteSeleccionado.getNombre());
-            cmbCarrera.setValue(estudianteSeleccionado.getCarrera());
-            chkActivo.setSelected(estudianteSeleccionado.isActivo());
-        }
-    }
-
-    @FXML
-    public void onGuardar(){
+    public void onGuardar() {
         String cedula = txtCedula.getText().trim();
         String nombre = txtNombre.getText().trim();
         String carrera = cmbCarrera.getValue();
         boolean activo = chkActivo.isSelected();
 
-        if(cedula.isEmpty() || nombre.isEmpty() || carrera == null){
-            mostrarAlerta("Validacion", "Llene todos los campos.", Alert.AlertType.WARNING);
+        // Capturar cuál RadioButton está seleccionado en el ToggleGroup
+        String genero = "";
+        if (rdMas.isSelected()) {
+            genero = "Masculino";
+        } else if (rdFem.isSelected()) {
+            genero = "Femenino";
+        }
+
+        // Validación incluyendo el nuevo campo
+        if (cedula.isEmpty() || nombre.isEmpty() || carrera == null || genero.isEmpty()) {
+            mostrarAlerta("Validacion", "Llene todos los campos, incluido el género.", Alert.AlertType.WARNING);
             return;
         }
-        if(cedula.length() != 10 || !cedula.matches("\\d+")){
+        if (cedula.length() != 10 || !cedula.matches("\\d+")) {
             mostrarAlerta("Validacion", "La cedula no es valida.", Alert.AlertType.ERROR);
             return;
         }
 
-        String query = "insert into estudiantes (cedula, nombre, carrera, activo) values (?, ?, ?, ?)";
+        String query = "INSERT INTO estudiantes (cedula, nombre, carrera, genero, activo) VALUES (?, ?, ?, ?, ?)";
 
         try (Connection con = Conexion.conectar();
-             PreparedStatement state = con.prepareStatement(query)){
+             PreparedStatement state = con.prepareStatement(query)) { // Uso seguro de PreparedStatement
 
             state.setString(1, cedula);
             state.setString(2, nombre);
             state.setString(3, carrera);
-            state.setBoolean(4, activo);
+            state.setString(4, genero);
+            state.setBoolean(5, activo);
 
-            state.executeUpdate();
+            state.executeUpdate(); // executeUpdate para operaciones de escritura (INSERT)
             mostrarAlerta("Exito", "Estudiante guardado en la base de datos.", Alert.AlertType.INFORMATION);
 
             cargarDatosTabla();
             onLimpiar();
 
-        }catch (SQLException e){
+        } catch (SQLException e) {
             mostrarAlerta("Error BD", e.getMessage(), Alert.AlertType.ERROR);
         }
     }
@@ -130,12 +145,16 @@ public class CrudController {
         String carrera = cmbCarrera.getValue();
         boolean activo = chkActivo.isSelected();
 
-        if (cedula.isEmpty() || nombre.isEmpty() || carrera == null || cedula.length() != 10) {
-            mostrarAlerta("Validación", "Verifica que todos los campos estén llenos y la cédula tenga 10 dígitos.", Alert.AlertType.WARNING);
+        String genero = "";
+        if (rdMas.isSelected()) genero = "Masculino";
+        if (rdFem.isSelected()) genero = "Femenino";
+
+        if (cedula.isEmpty() || nombre.isEmpty() || carrera == null || genero.isEmpty() || cedula.length() != 10) {
+            mostrarAlerta("Validación", "Verifique todos los campos.", Alert.AlertType.WARNING);
             return;
         }
 
-        String query = "UPDATE estudiantes SET cedula = ?, nombre = ?, carrera = ?, activo = ? WHERE id = ?";
+        String query = "UPDATE estudiantes SET cedula = ?, nombre = ?, carrera = ?, genero = ?, activo = ? WHERE id = ?";
 
         try (Connection con = Conexion.conectar();
              PreparedStatement pstmt = con.prepareStatement(query)) {
@@ -143,10 +162,11 @@ public class CrudController {
             pstmt.setString(1, cedula);
             pstmt.setString(2, nombre);
             pstmt.setString(3, carrera);
-            pstmt.setBoolean(4, activo);
-            pstmt.setInt(5, estudianteSeleccionado.getId());
+            pstmt.setString(4, genero);
+            pstmt.setBoolean(5, activo);
+            pstmt.setInt(6, estudianteSeleccionado.getId());
 
-            pstmt.executeUpdate();
+            pstmt.executeUpdate(); // executeUpdate para modificaciones
             mostrarAlerta("Éxito", "Estudiante modificado correctamente.", Alert.AlertType.INFORMATION);
 
             cargarDatosTabla();
@@ -161,7 +181,7 @@ public class CrudController {
     @FXML
     void onEliminar() {
         if (estudianteSeleccionado == null) {
-            mostrarAlerta("Atención", "Primero debes seleccionar un estudiante de la tabla.", Alert.AlertType.WARNING);
+            mostrarAlerta("Atención", "Primero debes seleccionar un estudiante.", Alert.AlertType.WARNING);
             return;
         }
 
@@ -171,7 +191,7 @@ public class CrudController {
              PreparedStatement pstmt = con.prepareStatement(query)) {
 
             pstmt.setInt(1, estudianteSeleccionado.getId());
-            pstmt.executeUpdate();
+            pstmt.executeUpdate(); // executeUpdate para eliminaciones
 
             mostrarAlerta("Éxito", "Estudiante eliminado.", Alert.AlertType.INFORMATION);
 
@@ -185,15 +205,17 @@ public class CrudController {
     }
 
     @FXML
-    public void onLimpiar(){
+    public void onLimpiar() {
         txtCedula.clear();
         txtNombre.clear();
         cmbCarrera.setValue(null);
         chkActivo.setSelected(false);
+        if (grupoGenero.getSelectedToggle() != null) {
+            grupoGenero.getSelectedToggle().setSelected(false); // Desmarcar los RadioButtons
+        }
     }
 
-    @FXML
-    void mostrarAlerta(String titulo, String mensaje, Alert.AlertType tipo){
+    void mostrarAlerta(String titulo, String mensaje, Alert.AlertType tipo) {
         Alert alerta = new Alert(tipo);
         alerta.setTitle(titulo);
         alerta.setHeaderText(null);
